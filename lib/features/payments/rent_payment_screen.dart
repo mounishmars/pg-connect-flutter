@@ -8,6 +8,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/data_providers.dart';
+import '../../core/theme/app_theme.dart';
+import '../../shared/widgets/design_widgets.dart';
 import '../owner/owner_inventory_screen.dart' show validAmount;
 
 class RentPaymentScreen extends ConsumerStatefulWidget {
@@ -176,8 +178,14 @@ class _RentPaymentScreenState extends ConsumerState<RentPaymentScreen> {
     body: !enabled ? const Center(child: Text('Stripe test checkout is not configured.')) :
       loading ? const Center(child: CircularProgressIndicator()) :
       Form(key: form, child: ListView(padding: const EdgeInsets.all(20), children: [
-        Text('Outstanding balance: ₹${widget.outstandingBalance.toStringAsFixed(2)}'),
-        const Text('Test mode only. Payments go to the platform account, not to the owner.'),
+        DesignPanel(color: AppTheme.paleGreen, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('OUTSTANDING BALANCE', style: TextStyle(color: AppTheme.muted, fontSize: 11, letterSpacing: 1, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text('₹${widget.outstandingBalance.toStringAsFixed(2)}', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          const Text('Test mode only. Payments go to the platform account, not to the owner.', style: TextStyle(color: AppTheme.muted)),
+        ])),
+        const SizedBox(height: 18),
         TextFormField(controller: amount, enabled: !busy && active == null && pending == null,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(labelText: 'Amount (INR)'),
@@ -187,6 +195,7 @@ class _RentPaymentScreenState extends ConsumerState<RentPaymentScreen> {
             if (double.parse(value!.trim()) > widget.outstandingBalance) return 'Amount exceeds the invoice balance.';
             return null;
           }),
+        if (active == null) const SizedBox(height: 12),
         if (active == null) TextFormField(controller: email, enabled: !busy && pending == null,
           keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email'),
           validator: (value) => value == null || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim())
@@ -194,6 +203,7 @@ class _RentPaymentScreenState extends ConsumerState<RentPaymentScreen> {
         if (message != null) Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(message!)),
         if (loadFailed)
           TextButton(onPressed: busy ? null : load, child: const Text('Retry loading payment status')),
+        const SizedBox(height: 16),
         FilledButton(onPressed: busy || loadFailed ? null : pay, child: Text(busy ? 'Please wait...' : active == null ? 'Continue to Stripe' : 'Resume checkout')),
         if (active != null) ...[
           TextButton(onPressed: busy ? null : check, child: const Text('Check payment status')),

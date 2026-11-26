@@ -1,14 +1,119 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pg_connect/core/api/api_client.dart';
+import 'package:pg_connect/core/api/data_providers.dart';
 import 'package:pg_connect/core/auth/token_storage.dart';
 import 'package:pg_connect/features/owner/owner_inventory_screen.dart';
 import 'package:pg_connect/features/owner/owner_invoices.dart';
+import 'package:pg_connect/features/owner/property_photos_screen.dart';
+import 'package:pg_connect/features/owner/property_amenities_screen.dart';
+
+class TestPhotoPicker extends ImagePicker {
+  TestPhotoPicker(this.bytes);
+  final Uint8List bytes;
+  @override
+  Future<List<XFile>> pickMultiImage({
+    double? maxWidth, double? maxHeight, int? imageQuality, int? limit, bool requestFullMetadata = true,
+  }) async => [XFile.fromData(bytes, name: 'test.png', mimeType: 'image/png')];
+}
 
 void main() {
+  testWidgets('saves selected catalog amenities for the owner property', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({'pg_connect_access_token': 'token'});
+    final api = ApiClient(TokenStorage());
+    List<dynamic>? saved;
+    api.dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      expect(request.headers['Authorization'], 'Bearer token');
+      if (request.path == '/amenities') {
+        handler.resolve(Response(requestOptions: request, statusCode: 200, data: [
+          {'code': 'wifi', 'name': 'Wi-Fi'}, {'code': 'parking', 'name': 'Parking'},
+        ]));
+      } else if (request.path == '/owner/properties/property-id/amenities' && request.method == 'GET') {
+        handler.resolve(Response(requestOptions: request, statusCode: 200, data: ['wifi']));
+      } else if (request.path == '/owner/properties/property-id/amenities' && request.method == 'PUT') {
+        saved = request.data['codes'] as List<dynamic>;
+        handler.resolve(Response(requestOptions: request, statusCode: 200));
+      } else {
+        handler.reject(DioException(requestOptions: request));
+      }
+    }));
+    await tester.pumpWidget(ProviderScope(overrides: [apiClientProvider.overrideWithValue(api)],
+      child: const MaterialApp(home: PropertyAmenitiesScreen(propertyId: 'property-id'))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wi-Fi'));
+    await tester.tap(find.text('Parking'));
+    await tester.tap(find.text('Save amenities'));
+    await tester.pumpAndSettle();
+    expect(saved, ['parking']);
+  });
+
+  testWidgets('uploads a selected property photo using the owner session', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({'pg_connect_access_token': 'token'});
+    final api = ApiClient(TokenStorage());
+    bool uploaded = false;
+    api.dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      expect(request.path, '/owner/properties/property-id/photos');
+      expect(request.headers['Authorization'], 'Bearer token');
+      expect((request.data as FormData).files.single.key, 'file');
+      uploaded = true;
+      handler.resolve(Response(requestOptions: request, statusCode: 200, data: {'id': 'photo'}));
+    }));
+    final png = Uint8List.fromList(base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg=='));
+    await tester.pumpWidget(ProviderScope(overrides: [
+      apiClientProvider.overrideWithValue(api),
+      photoPickerProvider.overrideWithValue(TestPhotoPicker(png)),
+      ownerPhotosProvider.overrideWith((ref, propertyId) async => []),
+    ], child: const MaterialApp(home: PropertyPhotosScreen(propertyId: 'property-id'))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add photos'));
+    await tester.pumpAndSettle();
+    expect(uploaded, isTrue);
+    expect(find.text('1 photo uploaded.'), findsOneWidget);
+  });
+
+  testWidgets('sets the cover and reorders property photos', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({'pg_connect_access_token': 'token'});
+    final api = ApiClient(TokenStorage());
+    var ids = ['one', 'two'];
+    api.dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      expect(request.headers['Authorization'], 'Bearer token');
+      if (request.path.endsWith('/two/cover')) {
+        ids = ['two', 'one'];
+      } else if (request.path.endsWith('/order')) {
+        ids = List<String>.from(request.data['photoIds'] as List);
+      } else {
+        handler.reject(DioException(requestOptions: request));
+        return;
+      }
+      handler.resolve(Response(requestOptions: request, statusCode: 200));
+    }));
+    final png = Uint8List.fromList(base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg=='));
+    await tester.pumpWidget(ProviderScope(overrides: [
+      apiClientProvider.overrideWithValue(api),
+      ownerPhotosProvider.overrideWith((ref, propertyId) async => [
+        for (var i = 0; i < ids.length; i++) {'id': ids[i], 'position': i, 'cover': i == 0},
+      ]),
+      photoBytesProvider.overrideWith((ref, path) async => png),
+    ], child: const MaterialApp(home: PropertyPhotosScreen(propertyId: 'property-id'))));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Set cover'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Set cover'));
+    await tester.pumpAndSettle();
+    expect(ids, ['two', 'one']);
+    await tester.ensureVisible(find.byTooltip('Move photo up').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Move photo up').last);
+    await tester.pumpAndSettle();
+    expect(ids, ['one', 'two']);
+  });
+
   testWidgets('creates a property using the authenticated API', (tester) async {
     FlutterSecureStorage.setMockInitialValues({'pg_connect_access_token': 'token'});
     final api = ApiClient(TokenStorage());

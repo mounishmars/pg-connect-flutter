@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/data_providers.dart';
+import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/async_view.dart';
+import '../../shared/widgets/design_widgets.dart';
 import '../customer/customer_shell.dart';
 import 'owner_dashboard_screen.dart';
 import 'owner_inventory_screen.dart';
@@ -35,11 +37,25 @@ class OwnerProperties extends ConsumerWidget {
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => const PropertyForm())),
       icon: const Icon(Icons.add), label: const Text('Add property')),
     body: AsyncView<List<Json>>(value: ref.watch(ownerPropertiesProvider), retry: () => ref.invalidate(ownerPropertiesProvider),
-      builder: (items) => items.isEmpty ? const Center(child: Text('No properties yet. Add one to get started.')) :
-        ListView(children: [for (final item in items) ListTile(title: Text(item['name'] as String),
-          subtitle: Text('${item['area']}, ${item['city']} · ${item['active'] == true ? 'Active' : 'Inactive'}'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => InventoryScreen(property: item))))])));
+      builder: (items) => items.isEmpty
+        ? const EmptyPanel(icon: Icons.home_work_outlined, title: 'No properties yet.', message: 'Add a property to get started.')
+        : ListView(padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), children: [
+          const Text('The spaces you manage, all in one place.', style: TextStyle(color: AppTheme.muted)),
+          const SizedBox(height: 16),
+          for (final item in items) Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Card(clipBehavior: Clip.antiAlias, child: InkWell(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => InventoryScreen(property: item))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                PropertyPhoto(path: item['coverPhotoId'] == null ? null :
+                  '/owner/properties/${item['id']}/photos/${item['coverPhotoId']}'),
+                ListTile(title: Text(item['name'] as String, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text('${item['area']}, ${item['city']} · ${item['active'] == true ? 'Active' : 'Inactive'}'),
+                  trailing: const Icon(Icons.chevron_right)),
+              ]),
+            )),
+          ),
+        ])));
 }
 
 class OwnerBookings extends ConsumerStatefulWidget {
@@ -65,8 +81,10 @@ class _OwnerBookingsState extends ConsumerState<OwnerBookings> {
         onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const OwnerInvoices()))),
     ]),
     body: AsyncView<List<Json>>(value: ref.watch(ownerBookingsProvider), retry: () => ref.invalidate(ownerBookingsProvider),
-      builder: (items) => items.isEmpty ? const Center(child: Text('No booking requests yet.')) :
-        ListView(children: [for (final item in items) Card(child: ListTile(
+      builder: (items) => items.isEmpty
+        ? const EmptyPanel(icon: Icons.groups_outlined, title: 'No booking requests yet.', message: 'New requests will appear here.')
+        : ListView(padding: const EdgeInsets.all(20), children: [for (final item in items) Padding(
+          padding: const EdgeInsets.only(bottom: 12), child: Card(child: ListTile(
           title: Text(item['tenantName'] as String),
           subtitle: Text('${item['propertyName']} · Room ${item['roomName']} · Bed ${item['bedLabel']}\n${item['status']}'),
           isThreeLine: true,
@@ -77,5 +95,5 @@ class _OwnerBookingsState extends ConsumerState<OwnerBookings> {
               enabled: busy == null, onSelected: (action) => change(item, action),
               itemBuilder: (_) => const [PopupMenuItem(value: 'approve', child: Text('Approve')),
                 PopupMenuItem(value: 'reject', child: Text('Reject'))]) : null,
-        ))])));
+        )))])));
 }

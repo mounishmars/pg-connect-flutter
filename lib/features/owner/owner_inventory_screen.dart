@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/data_providers.dart';
 import '../../shared/widgets/async_view.dart';
+import 'property_photos_screen.dart';
+import 'property_amenities_screen.dart';
 
 String? requiredText(String? value, int maxLength) {
   if (value == null || value.trim().isEmpty) return 'This field is required.';
@@ -106,6 +108,10 @@ class InventoryScreen extends ConsumerWidget {
     final inventory = ref.watch(inventoryProvider(id));
     return Scaffold(
       appBar: AppBar(title: Text(property['name'] as String), actions: [
+        IconButton(icon: const Icon(Icons.checklist), tooltip: 'Manage amenities', onPressed: () =>
+          Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => PropertyAmenitiesScreen(propertyId: id)))),
+        IconButton(icon: const Icon(Icons.photo_library_outlined), tooltip: 'Manage photos', onPressed: () =>
+          Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PropertyPhotosScreen(propertyId: id)))),
         IconButton(icon: const Icon(Icons.edit), tooltip: 'Edit property', onPressed: () async {
           final changed = await Navigator.of(context).push<bool>(MaterialPageRoute(
             builder: (_) => PropertyForm(property: property)));

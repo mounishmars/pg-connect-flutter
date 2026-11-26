@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/theme/app_theme.dart';
+import '../../shared/widgets/design_widgets.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -67,8 +69,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       padding: const EdgeInsets.all(24),
       child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 440), child: Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Welcome to PG Connect', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: AppTheme.forest, borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.home_rounded, color: Colors.white, size: 28),
+          ),
+          const SizedBox(height: 28),
+          Text('Welcome to PG Connect', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          const Text('A better way to feel at home.', style: TextStyle(color: AppTheme.muted)),
+          const SizedBox(height: 24),
           if (auth.error != null) ...[
             Text(auth.error!, style: const TextStyle(color: Colors.red)),
             TextButton(onPressed: () => ref.read(authControllerProvider.notifier).restore(), child: const Text('Retry session')),
@@ -76,7 +86,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           if (!kDebugMode || !developmentOtp)
             const Text('Production sign-in is not configured. Enable DEVELOPMENT_OTP only for local development.')
           else ...[
-            const Text('Development sign-in: the test code is displayed here; no SMS is sent.'),
+            const DesignPanel(color: AppTheme.paleGreen, child: Text('Development sign-in: the test code is displayed here; no SMS is sent.')),
             const SizedBox(height: 20),
             TextField(controller: phone, enabled: !busy && requestedPhone == null,
               keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone with country code')),
@@ -92,8 +102,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             if (error != null) Padding(padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(error!, style: const TextStyle(color: Colors.red))),
             const SizedBox(height: 16),
-            FilledButton(onPressed: busy ? null : (requestedPhone == null ? request : verify),
-              child: Text(busy ? 'Please wait...' : requestedPhone == null ? 'Request code' : 'Sign in')),
+            SizedBox(width: double.infinity, child: FilledButton(onPressed: busy ? null : (requestedPhone == null ? request : verify),
+              child: Text(busy ? 'Please wait...' : requestedPhone == null ? 'Request code' : 'Sign in'))),
           ],
         ])),
     ))));
