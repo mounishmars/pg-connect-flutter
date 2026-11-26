@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api_client.dart';
 import 'token_storage.dart';
@@ -31,15 +33,21 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> restore() async {
     try {
-      final token = await _storage.readAccessToken();
-      if (token == null || token.isEmpty) {
+      final hasSession = firebaseAuthEnabled
+          ? await FirebaseAuth.instance.authStateChanges().first != null
+          : (kDebugMode && developmentOtp && (await _storage.readAccessToken())?.isNotEmpty == true);
+      if (!hasSession) {
         state = const AuthState();
         return;
       }
       await refreshProfile();
     } on DioException catch (error) {
       if (error.response?.statusCode == 401) {
-        await _storage.clear();
+        if (firebaseAuthEnabled) {
+          await FirebaseAuth.instance.signOut();
+        } else {
+          await _storage.clear();
+        }
         state = const AuthState(error: 'Session expired. Please sign in again.');
       } else {
         state = const AuthState(error: 'Unable to restore session. Check your connection and retry.');
@@ -50,6 +58,9 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<String> requestOtp(String phone) async {
+    if (!kDebugMode || !developmentOtp || firebaseAuthEnabled) {
+      throw StateError('Development sign-in is disabled.');
+    }
     final response = await _api.dio.post<Map<String, dynamic>>('/auth/dev/otp', data: {'phone': phone});
     final code = response.data?['code'];
     if (code is! String || code.isEmpty) throw const FormatException('The server did not return a development code.');
@@ -57,6 +68,9 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> verifyOtp(String phone, String code, String fullName) async {
+    if (!kDebugMode || !developmentOtp || firebaseAuthEnabled) {
+      throw StateError('Development sign-in is disabled.');
+    }
     final response = await _api.dio.post<Map<String, dynamic>>('/auth/dev/verify',
       data: {'phone': phone, 'code': code, 'fullName': fullName});
     final token = response.data?['accessToken'];
@@ -66,6 +80,18 @@ class AuthController extends StateNotifier<AuthState> {
       await refreshProfile();
     } catch (_) {
       await _storage.clear();
+      rethrow;
+    }
+  }
+
+  Future<void> completeFirebaseSignIn(PhoneAuthCredential credential, String fullName) async {
+    if (!firebaseAuthEnabled) throw StateError('Firebase sign-in is disabled.');
+    await FirebaseAuth.instance.signInWithCredential(credential);
+    try {
+      await _api.dio.post<void>('/auth/firebase/register', data: {'fullName': fullName});
+      await refreshProfile();
+    } catch (_) {
+      await FirebaseAuth.instance.signOut();
       rethrow;
     }
   }
@@ -88,7 +114,11 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> signOut() async {
     await _api.dio.post<void>('/auth/logout');
-    await _storage.clear();
+    if (firebaseAuthEnabled) {
+      await FirebaseAuth.instance.signOut();
+    } else {
+      await _storage.clear();
+    }
     state = const AuthState();
   }
 }

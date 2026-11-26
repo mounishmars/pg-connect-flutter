@@ -28,6 +28,49 @@ five minutes. This login is available only in Flutter debug builds with the
 explicit `DEVELOPMENT_OTP` flag and must never be enabled on an exposed server.
 The session is stored in secure storage and `/me` determines owner access.
 
+## Firebase phone sign-in (test setup)
+
+Firebase sign-in is separate from development OTP. Register the Android
+package shown in `android/app/build.gradle.kts` with the test Firebase project,
+enable Phone authentication and add the debug signing SHA-1 and SHA-256.
+Configure fictional test numbers in Firebase; do not share their codes. For
+Android app verification on other builds, register the appropriate release
+signing fingerprints as well. A production build needs its own project and the
+intended production app identifier, rather than the current example ID.
+
+Create a local JSON file outside the repository containing Firebase's **client**
+configuration (not a service-account key):
+
+```json
+{
+  "FIREBASE_AUTH_ENABLED": "true",
+  "FIREBASE_PROJECT_ID": "your-test-project-id",
+  "FIREBASE_MESSAGING_SENDER_ID": "your-sender-id",
+  "FIREBASE_ANDROID_APP_ID": "your-android-app-id",
+  "FIREBASE_ANDROID_API_KEY": "your-android-client-api-key",
+  "API_BASE_URL": "http://10.0.2.2:8084/api/v1"
+}
+```
+
+Obtain these values from Firebase project settings for the registered Android
+app. Run a separate Firebase-configured backend and fresh database as described
+in the backend README, then build with
+`flutter run --dart-define-from-file=/path/outside/repository/firebase-test.json`.
+Do not set `DEVELOPMENT_OTP` in this build. Release builds require HTTPS for the
+API. Firebase maintains the session and refreshes ID tokens; signing out
+revokes sessions on all devices. Test sign-in, refresh and revocation against
+the configured project before relying on them.
+
+For iOS, register a separate iOS app and supply `FIREBASE_IOS_APP_ID`,
+`FIREBASE_IOS_API_KEY` and `FIREBASE_IOS_BUNDLE_ID` alongside the common
+settings. iOS phone authentication also requires Apple signing and Firebase's
+APNs / reCAPTCHA setup. The iOS integration has not been built or tested.
+Real SMS is subject to Firebase billing and quotas; fictional test numbers are
+for development only.
+
+Run the existing development-login tests with
+`flutter test --dart-define=DEVELOPMENT_OTP=true`.
+
 ## Connected screens
 
 The app loads properties and available beds, submits booking requests, lists and
@@ -49,7 +92,7 @@ the backend README.
 
 ## Still to build
 
-- Production SMS authentication, token refresh and production error handling.
+- End-to-end Firebase sign-in validation and production security hardening.
 - Invoice editing, cancellation and automated recurring billing.
 - End-to-end Stripe sandbox testing, refunds, disputes and production readiness.
   Do not enable live payments.

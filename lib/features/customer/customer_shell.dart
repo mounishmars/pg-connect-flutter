@@ -132,7 +132,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
         TextButton(onPressed: busy ? null : () => controller.switchRole(auth.role == UserRole.owner ? UserRole.customer : UserRole.owner),
           child: Text(auth.role == UserRole.owner ? 'Switch to customer' : 'Switch to owner')),
       TextButton(onPressed: busy ? null : () => run(controller.refreshProfile), child: const Text('Refresh account status')),
-      TextButton(onPressed: busy ? null : () => run(controller.signOut), child: const Text('Sign out')),
+      TextButton(onPressed: busy ? null : () => run(controller.signOut),
+        child: const Text(firebaseAuthEnabled ? 'Sign out on all devices' : 'Sign out')),
     ]));
   }
 }
